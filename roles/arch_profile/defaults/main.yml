@@ -1,0 +1,68 @@
+arch_profile_dotdrop:
+  directory: /home/user/dotdrop
+  git_clone: false
+  # github personal access token example
+  git_repo: https://user:personal_access_token@github.com/user/dotdrop.git
+  git_version: HEAD
+arch_profile_syncthing_config:
+  remote_host: 10.0.0.10:8384 # current available Syncthing server to work with
+  remote_api_key: remote_syncthing_api_key
+  default_data_folder: /data/syncthing
+  default_max_conflicts: 0
+  accepted_folders_labels:
+    - {name: 'folder1', waitsync: true, ignores: ['(?d)*ignore1*', '*ignore2*']}
+    - {name: 'folder2', waitsync: false}
+  defaults_ignores:
+    - "(?d).DS_Store"
+arch_profile_xfce_config:
+  displays: [':0.0']
+  xft_dpi: 136
+  settings:
+    - {channel: xsettings, property: 'Xft/DPI', set: 136, type: 'int'}
+    - {channel: xsettings, property: 'Gtk/FontName', set: 'Fira Sans Condensed, Condensed 10', type: 'string'}
+    - {channel: xsettings, property: 'Gtk/MonospaceFontName', set: 'Fira Sans Condensed, Semi-Light Condensed 9', type: 'string'}
+    - {channel: xsettings, property: 'Net/ThemeName', set: 'Arc-Dark-solid', type: 'string'}
+    - {channel: xsettings, property: 'Net/IconThemeName', set: 'Paper-Mono-Dark', type: 'string'}
+    - {channel: xfwm4, property: 'general/theme', set: 'Arc-Dark-solid', type: 'string'}
+  panels:
+    - {panel: 1, property: 'icon-size', set: '0', type: 'int'}
+    - {panel: 1, property: 'length', set: '100', type: 'int'}
+    - {panel: 1, property: 'length-adjust', set: 'false', type: 'bool'}
+    - {panel: 1, property: 'position', set: 'p=6;x=1128;y=20', type: 'string'}
+    - {panel: 1, property: 'position-locked', set: 'true', type: 'bool'}
+    - {panel: 1, property: 'size', set: '30', type: 'int'}
+  plugins:
+    - {plugin: 1, property: '', set: 'whiskermenu', type: 'string', config: true, panel: 1}
+    - {plugin: 2, property: '', set: 'tasklist', type: 'string', panel: 1}
+    - {plugin: 2, property: 'flat-buttons', set: 'true', type: 'bool'}
+    - {plugin: 2, property: 'show-handle', set: 'false', type: 'bool'}
+    - {plugin: 2, property: 'show-labels', set: 'false', type: 'bool'}
+    - {plugin: 2, property: 'show-only-minimized', set: 'false', type: 'bool'}
+    - {plugin: 2, property: 'show-wireframes', set: 'false', type: 'bool'}
+    - {plugin: 2, property: 'sort-order', set: '1', type: 'int'}
+    - {plugin: 2, property: 'switch-workspace-on-unminimize', set: 'false', type: 'bool'}
+    - {plugin: 2, property: 'window-scrolling', set: 'true', type: 'bool'}
+    - {plugin: 3, property: '', set: 'separator', type: 'string', panel: 1}
+    - {plugin: 3, property: 'expand', set: 'true', type: 'bool'}
+    - {plugin: 3, property: 'style', set: '0', type: 'int'}
+    - {plugin: 4, property: '', set: 'windowck-plugin', type: 'string', config: true, panel: 1}
+    - {plugin: 5, property: '', set: 'separator', type: 'string', panel: 1}
+    - {plugin: 5, property: 'expand', set: 'true', type: 'bool'}
+    - {plugin: 5, property: 'style', set: '0', type: 'int'}
+    - {plugin: 6, property: '', set: 'systray', type: 'string', panel: 1}
+    - {plugin: 6, property: 'hide-new-items', set: 'false', type: 'bool'}
+    - {plugin: 6, property: 'icon-size', set: '18', type: 'int'}
+    - {plugin: 6, property: 'menu-is-primary', set: 'false', type: 'bool'}
+    - {plugin: 6, property: 'single-row', set: 'true', type: 'bool'}
+    - {plugin: 6, property: 'square-icons', set: 'true', type: 'bool'}
+    - {plugin: 6, property: 'symbolic-icons', set: 'false', type: 'bool'}
+    - {plugin: 7, property: '', set: 'pulseaudio', type: 'string', panel: 1}
+    - {plugin: 7, property: 'enable-keyboard-shortcuts', set: 'true', type: 'bool'}
+    - {plugin: 8, property: '', set: 'notification-plugin', type: 'string', panel: 1}
+    - {plugin: 9, property: '', set: 'datetime', type: 'string', config: true, panel: 1}
+    - {plugin: 10, property: '', set: 'xkb', type: 'string', panel: 1}
+    - {plugin: 10, property: 'caps-lock-indicator', set: 'true', type: 'bool'}
+    - {plugin: 10, property: 'display-name', set: '1', type: 'int'}
+    - {plugin: 10, property: 'display-tooltip-icon', set: 'false', type: 'bool'}
+    - {plugin: 10, property: 'display-type', set: '2', type: 'int'}
+    - {plugin: 11, property: '', set: 'wckbuttons', type: 'string', config: true, panel: 1}

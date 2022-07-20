@@ -1,0 +1,535 @@
+---
+
+- name: Set ansible ssh user
+  set_fact:
+    ansible_ssh_user: root
+  delegate_to: localhost
+
+- name: Gathering facts
+  gather_facts:
+
+- name: Gathering dmsetup facts
+  command: sh -c "dmsetup ls | awk '{print $1}'"
+  register: dmsetup
+  changed_when: false
+
+- name: Check arhiso system
+  fail:
+    msg: "This host is not booted from the Arch install media!"
+  when: ansible_nodename != 'archiso'
+
+- name: Unmount all drives
+  mount:
+    path: "{{ item }}"
+    state: unmounted
+  loop:
+    - '/mnt/boot'
+    - '/mnt'
+  when: item in (ansible_mounts | json_query('[].mount'))
+
+- name: Remove root with dmsetup
+  command: sh -c 'yes y | dmsetup remove {{ item }}'
+  changed_when: false
+  loop: "{{ dmsetup.stdout_lines }}"
+  when: "'root' in item"
+
+- name: Remove data with dmsetup
+  command: sh -c 'yes y | dmsetup remove {{ item }}'
+  changed_when: false
+  loop: "{{ dmsetup.stdout_lines }}"
+  when:
+    - arch_install_data_drive is defined
+    - arch_install_data_drive_clenup
+    - "'data' in item"
+
+- name: Remove all other disks with dmsetup
+  command: sh -c 'yes y | dmsetup remove {{ item }}'
+  changed_when: false
+  loop: "{{ dmsetup.stdout_lines }}"
+  when:
+    - "'No' not in dmsetup.stdout"
+    - "'root' not in item"
+    - "'data' not in item"
+
+- name: Remove all other pvs
+  command: sh -c 'yes y | pvremove {{ item }} --force --force'
+  loop: "{{ ansible_lvm.pvs | list }}"
+  changed_when: false
+  when:
+    - arch_install_system_drive_root not in ansible_lvm.pvs
+    - arch_install_data_drive_data not in ansible_lvm.pvs
+
+- name: Remove root pv
+  command: sh -c 'yes y | pvremove {{ arch_install_system_drive_root }} --force --force'
+  changed_when: false
+  when: arch_install_system_drive_root in ansible_lvm.pvs
+
+- name: Remove data pv
+  command: sh -c 'yes y | pvremove {{ arch_install_data_drive_data }} --force --force'
+  changed_when: false
+  when:
+    - arch_install_data_drive is defined
+    - arch_install_data_drive_clenup
+    - arch_install_data_drive_data in ansible_lvm.pvs
+
+- name: Gathering facts after clenup
+  gather_facts:
+
+- name: Update metadata of existing root volume group
+  command: "vgck --updatemetadata {{ arch_install_lvm_root_vg }}"
+  changed_when: false
+  when: arch_install_lvm_root_vg in ansible_lvm.vgs
+
+- name: Reduce existing root volume group
+  command: "vgreduce --removemissing --force {{ arch_install_lvm_root_vg }}"
+  changed_when: false
+  when: arch_install_lvm_root_vg in ansible_lvm.vgs
+
+- name: Update metadata of existing data volume group
+  command: "vgck --updatemetadata {{ arch_install_lvm_data_vg }}"
+  changed_when: false
+  when:
+    - arch_install_lvm_data_vg in ansible_lvm.vgs
+    - arch_install_data_drive_clenup
+
+- name: Reduce existing root data group
+  command: "vgreduce --removemissing --force {{ arch_install_lvm_data_vg }}"
+  changed_when: false
+  when:
+    - arch_install_lvm_data_vg in ansible_lvm.vgs
+    - arch_install_data_drive_clenup
+
+- name: Remove existing root volume group
+  lvg:
+    vg: "{{ arch_install_lvm_root_vg }}"
+    force: true
+    state: absent
+  when: arch_install_lvm_root_vg in ansible_lvm.vgs
+
+- name: Remove existing data volume group
+  lvg:
+    vg: "{{ arch_install_lvm_data_vg }}"
+    force: true
+    state: absent
+  when:
+    - arch_install_lvm_data_vg in ansible_lvm.vgs
+    - arch_install_data_drive_clenup
+
+- name: Wipe system drive
+  command: "sgdisk -og {{ arch_install_system_drive }}"
+  changed_when: false
+
+- name: Wipe data drive
+  command: "sgdisk -og {{ arch_install_data_drive }}"
+  changed_when: false
+  when:
+    - arch_install_data_drive is defined
+    - arch_install_data_drive_clenup
+
+- name: Create root partition
+  command: "sgdisk -n 2:301M: -t 2:8e00 -c 2:root {{ arch_install_system_drive }}"
+  changed_when: false
+
+- name: Create data partition
+  command: "sgdisk -n 1: -t 1:8e00 -c 1:data {{ arch_install_data_drive }}"
+  changed_when: false
+  when:
+    - arch_install_data_drive is defined
+    - arch_install_data_drive_clenup
+
+- name: Create boot partition
+  command: "sgdisk -n 1:0M:+300M -t 1:ef00 -c 1:boot {{ arch_install_system_drive }}"
+  changed_when: false
+
+- name: Configure root volume group
+  lvg:
+    vg: "{{ arch_install_lvm_root_vg }}"
+    pvs: "{{ arch_install_system_drive_root }}"
+
+- name: Configure data volume group
+  lvg:
+    vg: "{{ arch_install_lvm_data_vg }}"
+    pvs: "{{ arch_install_data_drive_data }}"
+  when: arch_install_data_drive is defined
+
+- name: Configure root logical volume
+  lvol:
+    vg: "{{ arch_install_lvm_root_vg }}"
+    lv: root
+    size: 100%FREE
+    pvs: "{{ arch_install_system_drive_root }}"
+
+- name: Configure data logical volume
+  lvol:
+    shrink: false
+    vg: "{{ arch_install_lvm_data_vg }}"
+    lv: data
+    size: 100%FREE
+    pvs: "{{ arch_install_data_drive_data }}"
+  when: arch_install_data_drive is defined
+
+- name: Create and open root LUKS volume with passphrase
+  luks_device:
+    device: "/dev/{{ arch_install_lvm_root_vg }}/root"
+    passphrase: "{{ arch_install_luks_passphrase }}"
+    name: root
+    state: opened
+  register: luks_root
+  when: arch_install_luks_passphrase | default('', true) | trim != ''
+
+- name: Create and open data LUKS volume with passphrase
+  luks_device:
+    device: "/dev/{{ arch_install_lvm_data_vg }}/data"
+    passphrase: "{{ arch_install_luks_passphrase }}"
+    name: data
+    state: opened
+  register: luks_data
+  when:
+    - luks_root is not skipped
+    - arch_install_data_drive is defined
+
+- name: LUKS with keyfile
+  block:
+    - name: Generate a random luks keyfile
+      command: "dd bs=512 count=4 if=/dev/random of=/crypto_keyfile.bin iflag=fullblock"
+      changed_when: false
+
+    - name: Add kefile to root LUKS volume
+      luks_device:
+        device: "/dev/{{ arch_install_lvm_root_vg }}/root"
+        passphrase: "{{ arch_install_luks_passphrase }}"
+        new_keyfile: "/crypto_keyfile.bin"
+      register: luks_auto_unlock
+
+    - name: Add kefile to data LUKS volume
+      luks_device:
+        device: "/dev/{{ arch_install_lvm_data_vg }}/data"
+        passphrase: "{{ arch_install_luks_passphrase }}"
+        new_keyfile: "/crypto_keyfile.bin"
+      when: luks_data is not skipped
+  when:
+    - luks_root is not skipped
+    - arch_install_luks_auto_unlock
+
+- name: Get UUID for root LUKS volume
+  command: "blkid -s UUID -o value /dev/{{ arch_install_lvm_root_vg }}/root"
+  changed_when: false
+  register: root_luks_uuid
+  when: luks_root is not skipped
+
+- name: Get UUID for data LUKS volume
+  command: "blkid -s UUID -o value /dev/{{ arch_install_lvm_data_vg }}/data"
+  changed_when: false
+  register: data_luks_uuid
+  when: luks_data is not skipped
+
+- name: Set devices facts
+  set_fact:
+    device_root: "{{ 'root' if luks_root is not skipped else (arch_install_lvm_root_vg | replace('-','--')) + '-root' }}"
+    device_data: "{{ 'data' if luks_data is not skipped else (arch_install_lvm_data_vg | replace('-','--')) + '-data' }}"
+
+- name: Create FAT32 filesystem in boot partition
+  filesystem:
+    dev: "{{ arch_install_system_drive_boot }}"
+    fstype: vfat
+    opts: -F32
+    force: true
+
+- name: Create xfs filesystem in root volume
+  filesystem:
+    dev: "/dev/mapper/{{ device_root }}"
+    fstype: xfs
+    force: true
+
+- name: Create xfs filesystem in data volume
+  filesystem:
+    dev: "/dev/mapper/{{ device_data }}"
+    fstype: xfs
+    force: "{{ true if arch_install_data_drive_clenup else false }}"
+  when: arch_install_data_drive is defined
+
+- name: Get UUID for boot filesystem
+  command: blkid -s UUID -o value "{{ arch_install_system_drive_boot }}"
+  changed_when: false
+  register: boot_uuid
+
+- name: Get UUID for root filesystem
+  command: "blkid -s UUID -o value /dev/mapper/{{ device_root }}"
+  changed_when: false
+  register: root_uuid
+
+- name: Get UUID for data filesystem
+  command: "blkid -s UUID -o value /dev/mapper/{{ device_data }}"
+  changed_when: false
+  register: data_uuid
+  when: arch_install_data_drive is defined
+
+- name: Mount root filesystem
+  mount:
+    path: /mnt
+    src: UUID="{{ root_uuid.stdout }}"
+    fstype: xfs
+    state: mounted
+
+- name: Create mountpoint for boot volume
+  file:
+    path: /mnt/boot
+    mode: '0755'
+    state: directory
+
+- name: Create mountpoint for data volume
+  file:
+    path: /mnt/data
+    mode: '0755'
+    state: directory
+  when: arch_install_data_drive is defined
+
+- name: Mount boot filesystem
+  mount:
+    path: /mnt/boot
+    src: UUID="{{ boot_uuid.stdout }}"
+    fstype: vfat
+    state: mounted
+
+- name: Install packages with pacstrap
+  command: pacstrap /mnt "{{ item }}"
+  loop: "{{ arch_install_pacstrap_packages }}"
+  changed_when: false
+
+- name: Generate blank fstab
+  command: genfstab -U /mnt > /mnt/etc/fstab
+  args:
+    creates: /mnt/etc/fstab
+
+- name: Add root volume to fstab
+  mount:
+    fstab: /mnt/etc/fstab
+    path: /
+    src: UUID="{{ root_uuid.stdout }}"
+    fstype: xfs
+    opts: defaults
+    passno: "1"
+    state: present
+
+- name: Add boot volume to fstab
+  mount:
+    fstab: /mnt/etc/fstab
+    path: /boot
+    src: UUID="{{ boot_uuid.stdout }}"
+    fstype: vfat
+    opts: defaults
+    passno: "2"
+    state: present
+
+- name: Add data volume to fstab
+  mount:
+    fstab: /mnt/etc/fstab
+    path: /data
+    src: UUID="{{ data_uuid.stdout }}"
+    fstype: xfs
+    opts: defaults
+    passno: "1"
+    state: present
+  when: arch_install_data_drive is defined
+
+- name: Add data volume to crypttab with passphrase
+  lineinfile:
+    path: /mnt/etc/crypttab
+    line: "data  UUID={{ data_luks_uuid.stdout }}  none"
+  when:
+    - not arch_install_luks_auto_unlock
+    - luks_data is not skipped
+
+- name: Add data volume to crypttab with keyfile
+  lineinfile:
+    path: /mnt/etc/crypttab
+    line: "data  UUID={{ data_luks_uuid.stdout }}  /crypto_keyfile.bin  none"
+  when:
+    - arch_install_luks_auto_unlock
+    - luks_data is not skipped
+
+- name: Configure locale.gen
+  lineinfile:
+    dest: /mnt/etc/locale.gen
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  loop:
+    - {regexp: en_US\.UTF-8 UTF-8, line: en_US.UTF-8 UTF-8}
+    - {regexp: ru_RU\.UTF-8 UTF-8, line: ru_RU.UTF-8 UTF-8}
+
+- name: Create locale.conf
+  copy:
+    content: "LANG=en_US.UTF-8"
+    dest: /mnt/etc/locale.conf
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Generate locales
+  command: arch-chroot /mnt locale-gen
+  changed_when: false
+
+- name: Set hostname
+  copy:
+    content: "{{ inventory_hostname }}"
+    dest: /mnt/etc/hostname
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Enable NetworkManager
+  command: arch-chroot /mnt systemctl enable NetworkManager
+  changed_when: false
+
+- name: Enable sshd
+  command: arch-chroot /mnt systemctl enable sshd
+  changed_when: false
+
+- name: Add user
+  command:
+    arch-chroot /mnt useradd \
+    --create-home \
+    --user-group \
+    --groups wheel "{{ arch_install_user_name }}" \
+    --shell "{{ arch_install_user_shell }}"
+  args:
+    creates: /mnt/home/{{ arch_install_user_name }}
+
+- name: Add user password
+  command:
+    arch-chroot /mnt \
+    sh -c 'echo {{ arch_install_user_name }}:{{ arch_install_user_password }} | chpasswd'
+  changed_when: false
+
+- name: Passwordless sudo wheel group
+  copy:
+    content: '%wheel ALL=(ALL) NOPASSWD: ALL'
+    dest: /mnt/etc/sudoers.d/wheel
+    validate: /usr/sbin/visudo --check --file=%s
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Clone aur packages
+  command:
+    arch-chroot /mnt \
+    git clone \
+    https://aur.archlinux.org/"{{ item }}".git \
+    /home/"{{ arch_install_user_name }}"/"{{ item }}"
+  args:
+    creates: "/mnt/home/{{ arch_install_user_name }}/{{ item }}/PKGBUILD"
+  loop: "{{ arch_install_aur_packages }}"
+
+- name: Install aur packages
+  command:
+    arch-chroot /mnt \
+    sh -c \
+    '
+      cd /home/"{{ arch_install_user_name }}"/"{{ item }}"
+      && sudo -u "{{ arch_install_user_name }}"
+      BUILDDIR=/home/"{{ arch_install_user_name }}"/BUILDDIR
+      PKGDEST=/home/"{{ arch_install_user_name }}"/PKGDEST
+      SRCDEST=/home/"{{ arch_install_user_name }}"/SRCDEST
+      makepkg -sri --noconfirm
+      && rm -rf /home/"{{ arch_install_user_name }}"/{BUILDDIR,PKGDEST,SRCDEST}
+      && rm -rf /home/"{{ arch_install_user_name }}"/"{{ item }}"
+    '
+  loop: "{{ arch_install_aur_packages }}"
+  changed_when: false
+
+- name: Set plymouth theme
+  command:
+    arch-chroot /mnt \
+    plymouth-set-default-theme {{ arch_install_plymouth_theme }}
+  changed_when: false
+  when:
+    - "'plymouth' in arch_install_aur_packages"
+    - arch_install_plymouth_theme is defined
+
+- name: Update mkinitcpio.conf
+  lineinfile:
+    dest: /mnt/etc/mkinitcpio.conf
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  loop:
+    - regexp: ^MODULES=
+      line: MODULES=({{ arch_install_mkinitcpio.modules | join(' ') }})
+    - regexp: ^BINARIES=
+      line: BINARIES=({{ arch_install_mkinitcpio.binaries | join(' ') }})
+    - regexp: ^HOOKS=
+      line: HOOKS=({{ arch_install_mkinitcpio.hooks | join(' ') }})
+  loop_control:
+    label: "{{ item.regexp }}"
+
+- name: Copy crypto_keyfile.bin to system
+  copy:
+    src: "/crypto_keyfile.bin"
+    dest: "/mnt/crypto_keyfile.bin"
+    remote_src: true
+    mode: "0660"
+    owner: root
+    group: root
+  when: luks_auto_unlock is not skipped
+
+- name: Update mkinitcpio.conf with crypto_keyfile.bin
+  lineinfile:
+    dest: /mnt/etc/mkinitcpio.conf
+    regexp: "^FILES="
+    line: "FILES=(/crypto_keyfile.bin)"
+  when: luks_auto_unlock is not skipped
+
+- name: Create new initramfs
+  command: arch-chroot /mnt mkinitcpio -p linux
+  changed_when: false
+
+- name: Install systemd-boot
+  command: arch-chroot /mnt bootctl --path=/boot install
+  changed_when: false
+
+- name: Configure systemd-boot
+  lineinfile:
+    path: /mnt/boot/loader/loader.conf
+    line: "{{ item }}"
+    create: true
+    owner: root
+    group: root
+    mode: '0644'
+  loop: "{{ arch_install_systemd_boot_loader_conf }}"
+
+- name: Add systemd-boot config
+  template:
+    src: arch.conf.j2
+    dest: /mnt/boot/loader/entries/arch.conf
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Reboot
+  reboot:
+    connect_timeout: 1
+    reboot_timeout: 1
+  failed_when: false
+
+- name: Set ansible ssh user for installed system
+  set_fact:
+    ansible_ssh_user: "{{ arch_install_user_name }}"
+  delegate_to: localhost
+
+- name: Passphrase message
+  debug:
+    msg: "Please enter passphrase '{{ arch_install_luks_passphrase }}' for your system!"
+  when:
+    - luks_auto_unlock is skipped
+    - luks_root is not skipped
+
+- name: Wait for system restart
+  pause:
+    seconds: 20
+
+- name: Wait for system boot
+  wait_for_connection:
+    delay: 10
+    timeout: 120
+  changed_when: false
+
+...

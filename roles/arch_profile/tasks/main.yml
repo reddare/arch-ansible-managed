@@ -1,0 +1,37 @@
+---
+
+- name: Get user info with getent
+  getent:
+    database: passwd
+    key: "{{ ansible_ssh_user }}"
+
+- name: Gathering facts
+  gather_facts:
+
+- name: Gathering packages facts
+  package_facts:
+    manager: pacman
+
+- name: Include user tasks
+  include_tasks: user.yml
+
+- name: Include Syncthing tasks
+  include_tasks: syncthing.yml
+  when: "'syncthing' in ansible_facts.packages"
+
+- name: Include dotdrop tasks
+  include_tasks: dotdrop.yml
+  when: "'dotdrop' in ansible_facts.packages"
+
+- name: Include XFCE tasks
+  include_tasks: xfce.yml
+  when: "'xfwm4' in ansible_facts.packages"
+
+- name: Include misc tasks
+  include_tasks: misc.yml
+
+- name: Include LightDM tasks
+  include_tasks: lightdm.yml
+  when: "'lightdm' in ansible_facts.packages"
+
+...

@@ -1,0 +1,35 @@
+---
+
+- name: Update lightdm.conf
+  lineinfile:
+    dest: /etc/lightdm/lightdm.conf
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  loop:
+    - regexp: ^#greeter-setup-script
+      line: 'greeter-setup-script=/usr/bin/numlockx on'
+  loop_control:
+    label: "{{ item.regexp }}"
+  when:
+    - "'numlockx' in ansible_facts.packages"
+
+- name: Update lightdm-gtk-greeter.conf
+  lineinfile:
+    dest: /etc/lightdm/lightdm-gtk-greeter.conf
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  loop:
+    - regexp: ^#xft-dpi
+      line: 'xft-dpi={{ arch_profile_xfce_config.xft_dpi }}'
+  loop_control:
+    label: "{{ item.regexp }}"
+  when: arch_profile_xfce_config.xft_dpi is defined
+
+- name: Enable LightDM
+  systemd:
+    name: "{{ 'lightdm-plymouth' if 'plymouth' in ansible_facts.packages else 'lightdm' }}"
+    enabled: true
+    state: started
+  changed_when: false
+
+...

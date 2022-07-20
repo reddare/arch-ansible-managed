@@ -1,0 +1,11 @@
+---
+
+- hosts: all
+  any_errors_fatal: true
+  gather_facts: false
+  roles:
+    - {role: arch_install, tags: [install]}
+    - {role: arch_bootstrap, tags: [bootstrap]}
+    - {role: arch_profile, tags: [profile]}
+
+...

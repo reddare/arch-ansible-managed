@@ -1,0 +1,197 @@
+---
+
+arch_install_system_drive: /dev/nvme1n1
+arch_install_data_drive: /dev/nvme0n1
+arch_install_data_drive_clenup: true
+arch_install_pacstrap_packages:
+  - amd-ucode
+  - base
+  - base-devel
+  - git
+  - linux
+  - linux-firmware
+  - linux-headers
+  - lvm2
+  - networkmanager
+  - openssh
+  - sudo
+  - xfsprogs
+  - zsh
+arch_install_mkinitcpio:
+  modules:
+    - amdgpu
+  binaries:
+    - fsck
+    - fsck.xfs
+    - xfs_repair
+  hooks:
+    - base
+    - udev
+    - autodetect
+    - keyboard
+    - keymap
+    - modconf
+    - numlock
+    - block
+    - plymouth
+    - plymouth-encrypt
+    - lvm2
+    - filesystems
+    - fsck
+arch_bootstrap_pacman_packages:
+  - arc-gtk-theme
+  - arc-solid-gtk-theme
+  - bluez
+  - bluez-utils
+  - cfssl
+  - dmidecode
+  - firefox
+  - gvfs
+  - gvfs-smb
+  - gtk4
+  - lib32-mesa
+  - lightdm
+  - lightdm-gtk-greeter
+  - lxappearance-gtk3
+  - mesa
+  - network-manager-applet
+  - networkmanager-l2tp
+  - networkmanager-openconnect
+  - networkmanager-openvpn
+  - networkmanager-pptp
+  - nm-connection-editor
+  - noto-fonts
+  - numlockx
+  - openvpn
+  - openconnect
+  - pacman-contrib
+  - pavucontrol
+  - pipewire
+  - pipewire-pulse
+  - ppp
+  - python
+  - python-pip
+  - samba
+  - syncthing
+  - ttf-fira-sans
+  - vi
+  - vim
+  - wmctrl
+  - xfce4
+  - xfce4-goodies
+  - xf86-video-amdgpu
+  - xorg
+  - xorg-xinit
+  - zsh
+  - zsh-completions
+arch_bootstrap_yay_packages:
+  - dotdrop
+  - nordzy-cursors
+  - paper-icon-theme-git
+  - xfce4-windowck-plugin
+arch_profile_dotdrop:
+  directory: /data/syncthing/configs/dotdrop
+arch_profile_syncthing_config:
+  remote_host: 10.0.0.100:8384
+  remote_api_key: remote_api_key
+  default_data_folder: /data/syncthing
+  default_max_conflicts: 0
+  accepted_folders_labels:
+    - {name: 'configs', waitsync: true, ignores: ['(?d)*socket*', '(?d)*nfreeze*']}
+    - {name: 'docs', waitsync: true}
+  defaults_ignores:
+    - "(?d).DS_Store"
+    - "(?d)*conflict*"
+arch_profile_xfce_config:
+  displays: [':0.0']
+  xft_dpi: 100
+  settings:
+    - {channel: xsettings, property: 'Xft/DPI', set: 100, type: 'int'}
+    - {channel: xsettings, property: 'Gtk/FontName', set: 'Fira Sans Condensed, Condensed 10', type: 'string'}
+    - {channel: xsettings, property: 'Gtk/MonospaceFontName', set: 'Fira Sans Condensed, Semi-Light Condensed 9', type: 'string'}
+    - {channel: xsettings, property: 'Gtk/CursorThemeName', set: 'Nordzy-cursors', type: 'string'}
+    - {channel: xsettings, property: 'Gtk/CursorThemeSize', set: '16', type: 'int'}
+    - {channel: xsettings, property: 'Net/ThemeName', set: 'Arc-Dark-solid', type: 'string'}
+    - {channel: xsettings, property: 'Net/IconThemeName', set: 'Paper-Mono-Dark', type: 'string'}
+    - {channel: xfwm4, property: 'general/theme', set: 'Arc-Dark-solid', type: 'string'}
+    - {channel: xfwm4, property: 'general/title_font', set: 'Fira Sans Condensed, Condensed 10', type: 'string'}
+    - {channel: xfwm4, property: 'general/borderless_maximize', set: 'true', type: 'bool'}
+    - {channel: xfwm4, property: 'general/button_layout', set: 'O|HMC', type: 'string'}
+    - {channel: xfwm4, property: 'general/titleless_maximize', set: 'true', type: 'bool'}
+    - {channel: xfwm4, property: 'general/workspace_count', set: '1', type: 'string'}
+    - {channel: keyboard-layout, property: 'Default/XkbDisable', set: 'false', type: 'bool'}
+    - {channel: keyboard-layout, property: 'Default/XkbLayout', set: 'us,ru', type: 'string'}
+    - {channel: keyboard-layout, property: 'Default/XkbModel', set: 'pc105', type: 'string'}
+    - {channel: keyboard-layout, property: 'Default/XkbOptions/Group', set: 'grp:win_space_toggle', type: 'string'}
+    - {channel: keyboard-layout, property: 'Default/XkbVariant', set: ',', type: 'string'}
+    - {channel: xfce4-notifyd, property: 'do-fadeout', set: 'true', type: 'bool'}
+    - {channel: xfce4-notifyd, property: 'do-not-disturb', set: 'true', type: 'bool'}
+    - {channel: xfce4-notifyd, property: 'do-slideout', set: 'true', type: 'bool'}
+    - {channel: xfce4-notifyd, property: 'log-level', set: '0', type: 'int'}
+    - {channel: xfce4-notifyd, property: 'log-level-apps', set: '0', type: 'int'}
+    - {channel: xfce4-notifyd, property: 'notify-location', set: '2', type: 'int'}
+    - {channel: xfce4-notifyd, property: 'primary-monitor', set: '1', type: 'int'}
+    - {channel: xfce4-notifyd, property: 'theme', set: 'Default', type: 'string'}
+    - {channel: xfce4-screensaver, property: 'saver/idle-activation/enabled', set: 'true', type: 'bool'}
+    - {channel: xfce4-screensaver, property: 'saver/idle-activation/delay', set: '30', type: 'int'}
+    - {channel: xfce4-session, property: 'general/SaveOnExit', set: 'false', type: 'bool'}
+    - {channel: thunar, property: 'last-icon-view-zoom-level', set: 'THUNAR_ZOOM_LEVEL_100_PERCENT', type: 'string'}
+    - {channel: thunar, property: 'last-location-bar', set: 'ThunarLocationButtons', type: 'string'}
+    - {channel: thunar, property: 'last-menubar-visible', set: 'false', type: 'bool'}
+    - {channel: thunar, property: 'last-show-hidden', set: 'true', type: 'bool'}
+    - {channel: thunar, property: 'last-side-pane', set: 'ThunarShortcutsPane', type: 'string'}
+    - {channel: thunar, property: 'last-view', set: 'ThunarIconView', type: 'string'}
+    - {channel: thunar, property: 'misc-change-window-icon', set: 'true', type: 'bool'}
+    - {channel: thunar, property: 'misc-date-style', set: 'THUNAR_DATE_STYLE_DDMMYYYY', type: 'string'}
+    - {channel: thunar, property: 'misc-directory-specific-settings', set: 'true', type: 'bool'}
+    - {channel: thunar, property: 'misc-file-size-binary', set: 'true', type: 'bool'}
+    - {channel: thunar, property: 'misc-middle-click-in-tab', set: 'true', type: 'bool'}
+    - {channel: thunar, property: 'misc-open-new-window-as-tab', set: 'true', type: 'bool'}
+    - {channel: thunar, property: 'misc-show-delete-action', set: 'true', type: 'bool'}
+    - {channel: thunar, property: 'misc-single-click', set: 'false', type: 'bool'}
+    - {channel: thunar, property: 'misc-text-beside-icons', set: 'false', type: 'bool'}
+    - {channel: thunar, property: 'shortcuts-icon-emblems', set: 'true', type: 'bool'}
+    - {channel: thunar, property: 'shortcuts-icon-size', set: 'THUNAR_ICON_SIZE_16', type: 'string'}
+    - {channel: thunar, property: 'tree-icon-size', set: 'THUNAR_ICON_SIZE_16', type: 'string'}
+  panels:
+    - {panel: 1, property: 'icon-size', set: '0', type: 'int'}
+    - {panel: 1, property: 'length', set: '100', type: 'int'}
+    - {panel: 1, property: 'length-adjust', set: 'false', type: 'bool'}
+    - {panel: 1, property: 'position', set: 'p=6;x=1128;y=20', type: 'string'}
+    - {panel: 1, property: 'position-locked', set: 'true', type: 'bool'}
+    - {panel: 1, property: 'size', set: '30', type: 'int'}
+  plugins:
+    - {plugin: 1, property: '', set: 'whiskermenu', type: 'string', config: true, panel: 1}
+    - {plugin: 2, property: '', set: 'tasklist', type: 'string', panel: 1}
+    - {plugin: 2, property: 'flat-buttons', set: 'true', type: 'bool'}
+    - {plugin: 2, property: 'show-handle', set: 'false', type: 'bool'}
+    - {plugin: 2, property: 'show-labels', set: 'false', type: 'bool'}
+    - {plugin: 2, property: 'show-only-minimized', set: 'false', type: 'bool'}
+    - {plugin: 2, property: 'show-wireframes', set: 'false', type: 'bool'}
+    - {plugin: 2, property: 'sort-order', set: '1', type: 'int'}
+    - {plugin: 2, property: 'switch-workspace-on-unminimize', set: 'false', type: 'bool'}
+    - {plugin: 2, property: 'window-scrolling', set: 'true', type: 'bool'}
+    - {plugin: 3, property: '', set: 'separator', type: 'string', panel: 1}
+    - {plugin: 3, property: 'expand', set: 'true', type: 'bool'}
+    - {plugin: 3, property: 'style', set: '0', type: 'int'}
+    - {plugin: 4, property: '', set: 'windowck-plugin', type: 'string', config: true, panel: 1}
+    - {plugin: 5, property: '', set: 'separator', type: 'string', panel: 1}
+    - {plugin: 5, property: 'expand', set: 'true', type: 'bool'}
+    - {plugin: 5, property: 'style', set: '0', type: 'int'}
+    - {plugin: 6, property: '', set: 'systray', type: 'string', panel: 1}
+    - {plugin: 6, property: 'hide-new-items', set: 'false', type: 'bool'}
+    - {plugin: 6, property: 'icon-size', set: '18', type: 'int'}
+    - {plugin: 6, property: 'menu-is-primary', set: 'false', type: 'bool'}
+    - {plugin: 6, property: 'single-row', set: 'true', type: 'bool'}
+    - {plugin: 6, property: 'square-icons', set: 'true', type: 'bool'}
+    - {plugin: 6, property: 'symbolic-icons', set: 'false', type: 'bool'}
+    - {plugin: 7, property: '', set: 'pulseaudio', type: 'string', panel: 1}
+    - {plugin: 7, property: 'enable-keyboard-shortcuts', set: 'true', type: 'bool'}
+    - {plugin: 8, property: '', set: 'notification-plugin', type: 'string', panel: 1}
+    - {plugin: 9, property: '', set: 'datetime', type: 'string', config: true, panel: 1}
+    - {plugin: 10, property: '', set: 'xkb', type: 'string', panel: 1}
+    - {plugin: 10, property: 'caps-lock-indicator', set: 'true', type: 'bool'}
+    - {plugin: 10, property: 'display-name', set: '1', type: 'int'}
+    - {plugin: 10, property: 'display-tooltip-icon', set: 'false', type: 'bool'}
+    - {plugin: 10, property: 'display-type', set: '2', type: 'int'}
+    - {plugin: 11, property: '', set: 'wckbuttons', type: 'string', config: true, panel: 1}

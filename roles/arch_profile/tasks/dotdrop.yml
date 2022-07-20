@@ -1,0 +1,40 @@
+---
+
+- name: Create dotdrop directory
+  file:
+    path: "{{ arch_profile_dotdrop.directory }}"
+    state: directory
+    owner: "{{ ansible_ssh_user }}"
+    group: "{{ ansible_ssh_user }}"
+    mode: '0755'
+  when: arch_profile_dotdrop.git_clone | default ('false') | bool
+
+- name: Clone dotdrop from git
+  git:
+    repo: "{{ arch_profile_dotdrop.git_repo }}"
+    version: "{{ arch_profile_dotdrop.git_version }}"
+    dest: "{{ arch_profile_dotdrop.directory }}"
+  when: arch_profile_dotdrop.git_clone | default ('false') | bool
+
+- name: Get dotdrop profiles
+  command: dotdrop profiles
+  become: true
+  become_user: "{{ ansible_ssh_user }}"
+  args:
+    chdir: "{{ arch_profile_dotdrop.directory }}"
+  register: dotdrop_profiles
+  changed_when: false
+  when: "'dotdrop' in ansible_facts.packages"
+
+- name: Install dotfiles with dotdrop
+  command: dotdrop install -f
+  become: true
+  become_user: "{{ ansible_ssh_user }}"
+  args:
+    chdir: "{{ arch_profile_dotdrop.directory }}"
+  changed_when: false
+  when:
+    - dotdrop_profiles is not skipped
+    - inventory_hostname in dotdrop_profiles.stdout
+
+...

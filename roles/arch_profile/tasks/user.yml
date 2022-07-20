@@ -1,0 +1,15 @@
+---
+
+- name: Change ownership for data directory
+  file:
+    path: "{{ item.mount }}"
+    state: directory
+    owner: "{{ ansible_ssh_user }}"
+    group: "{{ ansible_ssh_user }}"
+    mode: '0755'
+  loop: "{{ ansible_mounts }}"
+  loop_control:
+    label: "{{ item.mount }}"
+  when: "item.mount == '/data'"
+
+...

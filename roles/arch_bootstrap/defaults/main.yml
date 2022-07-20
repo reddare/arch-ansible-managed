@@ -1,0 +1,14 @@
+arch_bootstrap_country: Russia
+arch_bootstrap_timezone: Europe/Moscow
+arch_bootstrap_pacman_packages:
+  - arc-solid-gtk-theme
+  - lightdm
+  - lightdm-gtk-greeter
+  - ttf-fira-sans
+  - xfce4
+  - xfce4-goodies
+  - xorg
+  - xorg-xinit
+arch_bootstrap_yay_packages:
+  - xfce4-windowck-plugin
+  - paper-icon-theme-git

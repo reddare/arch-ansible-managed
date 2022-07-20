@@ -1,0 +1,61 @@
+arch_install_system_drive: /dev/nvme0n1
+arch_install_system_drive_boot: "{{ arch_install_system_drive + 'p1'}}"
+arch_install_system_drive_root: "{{ arch_install_system_drive + 'p2'}}"
+# arch_install_data_drive: /dev/nvme0n1 # define to enable data drive usage
+arch_install_data_drive_data: "{{ arch_install_data_drive + 'p1'}}"
+arch_install_data_drive_clenup: true # wipe and delete all data
+arch_install_lvm_root_vg: root-vg
+arch_install_lvm_data_vg: data-vg
+arch_install_country: Russia
+arch_install_user_name: user
+arch_install_user_password: 12345
+arch_install_user_shell: /usr/bin/zsh
+arch_install_luks_passphrase: '' # LUKS disabled with empty passphrase
+# WARNING:
+# Use LUKS auto unlock only for testing
+# When enabled, generated keyfile loaded into initramfs
+arch_install_luks_auto_unlock: false
+arch_install_pacstrap_packages:
+  - intel-ucode # or 'amd-ucode'
+  - base
+  - base-devel
+  - git
+  - linux
+  - linux-firmware
+  - linux-headers
+  - lvm2
+  - networkmanager
+  - openssh
+  - sudo
+  - xfsprogs
+  - zsh
+arch_install_aur_packages:
+  - mkinitcpio-numlock
+  - plymouth
+  - plymouth-theme-arch-charge-big
+arch_install_plymouth_theme: arch-charge-big
+arch_install_mkinitcpio:
+  modules:
+    - i915 # or 'amdgpu'
+  binaries:
+    - fsck
+    - fsck.xfs
+    - xfs_repair
+  hooks: # order is important
+    - base
+    - udev
+    - autodetect
+    - keyboard
+    - keymap
+    - modconf
+    - numlock
+    - block
+    - plymouth
+    - plymouth-encrypt
+    - lvm2
+    - filesystems
+    - fsck
+arch_install_systemd_boot_loader_conf:
+  - 'default arch'
+  - 'timeout 5'
+  - 'console-mode 1'

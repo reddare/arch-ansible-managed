@@ -1,0 +1,177 @@
+---
+
+- name: Configure xfce
+  command:
+    xfconf-query \
+      -c {{ item.channel }} \
+      -pn "{{ '/' + item.property }}" \
+      -s "{{ item.set }}" \
+      -t "{{ item.type }}"
+  environment:
+    - DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ getent_passwd[ansible_ssh_user].1 }}/bus"
+  loop: "{{ arch_profile_xfce_config.settings }}"
+  loop_control:
+    label: "{{ item.property }}"
+  become: true
+  become_user: "{{ ansible_ssh_user }}"
+  changed_when: false
+
+- name: Get xfce panels
+  command: sh -c 'xfconf-query -c xfce4-panel -l | grep "/panels"'
+  environment:
+    - DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ getent_passwd[ansible_ssh_user].1 }}/bus"
+  register: xfce_panels
+  become: true
+  become_user: "{{ ansible_ssh_user }}"
+  changed_when: false
+  failed_when: xfce_panels.stderr != ''
+
+- name: Delete xfce panels
+  command: xfconf-query -c xfce4-panel -p {{ item }} -r -R
+  environment:
+    - DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ getent_passwd[ansible_ssh_user].1 }}/bus"
+  loop: "{{ xfce_panels.stdout_lines }}"
+  become: true
+  become_user: "{{ ansible_ssh_user }}"
+  changed_when: false
+
+- name: Restart xfce panels
+  command: xfce4-panel --restart
+  environment:
+    - DISPLAY: "{{ item }}"
+  loop: "{{ arch_profile_xfce_config.displays }}"
+  become: true
+  become_user: "{{ ansible_ssh_user }}"
+  failed_when: false
+  changed_when: false
+
+- name: Get xfce plugins
+  command: sh -c 'xfconf-query -c xfce4-panel -l | grep "/plugins"'
+  environment:
+    - DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ getent_passwd[ansible_ssh_user].1 }}/bus"
+  register: xfce_plugins
+  failed_when: xfce_plugins.stderr != ''
+  become: true
+  become_user: "{{ ansible_ssh_user }}"
+  changed_when: false
+
+- name: Delete xfce plugins
+  command: xfconf-query -c xfce4-panel -p {{ item }} -r -R
+  environment:
+    - DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ getent_passwd[ansible_ssh_user].1 }}/bus"
+  loop: "{{ xfce_plugins.stdout_lines }}"
+  become: true
+  become_user: "{{ ansible_ssh_user }}"
+  changed_when: false
+
+- name: Add xfce panel-1 to panels
+  command:
+    xfconf-query -c xfce4-panel -pn /panels -a -t int -s 1
+  environment:
+    - DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ getent_passwd[ansible_ssh_user].1 }}/bus"
+  become: true
+  become_user: "{{ ansible_ssh_user }}"
+  changed_when: false
+
+- name: Configure xfce panels
+  command:
+    xfconf-query \
+      -c xfce4-panel \
+      -pn /panels/panel-"{{ item.panel }}{{ '/' + item.property }}" \
+      -s "{{ item.set }}" \
+      -t "{{ item.type }}"
+  environment:
+    - DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ getent_passwd[ansible_ssh_user].1 }}/bus"
+  loop: "{{ arch_profile_xfce_config.panels }}"
+  loop_control:
+    label: "{{ item.property }}"
+  become: true
+  become_user: "{{ ansible_ssh_user }}"
+  changed_when: false
+
+- name: Configure xfce plugins
+  command:
+    xfconf-query \
+      -c xfce4-panel \
+      -pn /plugins/plugin-"{{ item.plugin }}{{ ( '/' + item.property ) if item.property }}" \
+      -s "{{ item.set }}" \
+      -t "{{ item.type }}"
+  environment:
+    - DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ getent_passwd[ansible_ssh_user].1 }}/bus"
+  loop: "{{ arch_profile_xfce_config.plugins }}"
+  loop_control:
+    label: "{{ item.property if item.property else item.set }}"
+  become: true
+  become_user: "{{ ansible_ssh_user }}"
+  changed_when: false
+
+- name: Get plugins panel info
+  set_fact:
+    plugins: "{{ plugins | default([]) + [ plugin ] }}"
+  loop: "{{ arch_profile_xfce_config.plugins }}"
+  loop_control:
+    label: "{{ item.set }}"
+  vars:
+    plugin:
+      id: "{{ item.plugin | string }}"
+      panel: "{{ item.panel | string }}"
+  when: item.panel is defined
+
+- name: Get panels id
+  set_fact:
+    panels: "{{ panels | default([]) + [ item.panel | string ] }}"
+  loop: "{{ arch_profile_xfce_config.panels }}"
+  loop_control:
+    label: "{{ item.panel }}"
+  when: (item.panel | string) not in (panels | default([]))
+
+- name: Configure xfce panel plugins
+  command:
+    sh -c \
+    '
+      xfconf-query
+      -c xfce4-panel
+      -pn /panels/panel-{{ item }}/plugin-ids \
+      -a
+        {% for plugin in plugins %}
+          {% if plugin.panel == item %}{{ '-t int -s ' + plugin.id + ' ' }}{% endif %}
+        {% endfor %}
+    '
+  loop: "{{ panels }}"
+  environment:
+    - DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ getent_passwd[ansible_ssh_user].1 }}/bus"
+  become: true
+  become_user: "{{ ansible_ssh_user }}"
+  changed_when: false
+
+- name: Create xfce plugins config directory
+  file:
+    path: "/home/{{ ansible_ssh_user }}/.config/xfce4/panel/"
+    state: directory
+    owner: "{{ ansible_ssh_user }}"
+    group: "{{ ansible_ssh_user }}"
+    mode: '0755'
+
+- name: Configure xfce plugins with templates
+  template:
+    src: "xfce/{{ item.set + '.rc' }}"
+    dest: "/home/{{ ansible_ssh_user }}/.config/xfce4/panel/{{ item.set + '-' + item.plugin | string + '.rc' }}"
+    owner: "{{ ansible_ssh_user }}"
+    group: "{{ ansible_ssh_user }}"
+    mode: '0644'
+  loop: "{{ arch_profile_xfce_config.plugins }}"
+  loop_control:
+    label: "{{ item.property if item.property else item.set }}"
+  when: item.config is defined and item.config
+
+- name: Restart xfce panels
+  command: xfce4-panel --restart
+  environment:
+    - DISPLAY: "{{ item }}"
+  loop: "{{ arch_profile_xfce_config.displays }}"
+  become: true
+  become_user: "{{ ansible_ssh_user }}"
+  changed_when: false
+  failed_when: false
+
+...

@@ -1,0 +1,288 @@
+---
+
+- name: Create data Syncthing directory
+  file:
+    path: "{{ arch_profile_syncthing_config.default_data_folder }}"
+    state: directory
+    owner: "{{ ansible_ssh_user }}"
+    group: "{{ ansible_ssh_user }}"
+    mode: '0755'
+
+- name: Enable Syncthing
+  systemd:
+    name: syncthing
+    enabled: true
+    state: started
+    scope: user
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ getent_passwd[ansible_ssh_user].1 }}"
+  become: true
+  become_user: "{{ ansible_ssh_user }}"
+  changed_when: false
+
+- name: Get local Syncthing API key
+  xml:
+    path: ~/.config/syncthing/config.xml
+    xpath: /configuration/gui/apikey
+    content: text
+  register: syncthing_api_key
+  become: true
+  become_user: "{{ ansible_ssh_user }}"
+
+- name: Get local Syncthing status
+  uri:
+    method: GET
+    validate_certs: false
+    return_content: true
+    headers:
+      X-API-Key: "{{ syncthing_api_key.matches[0].apikey }}"
+    url: "http://localhost:8384/rest/system/status"
+    remote_src: true
+  register: local_syncthing_status
+  until: local_syncthing_status.status == 200
+  retries: 10
+  delay: 5
+
+- name: Update local Syncthing folders ignore patterns
+  uri:
+    method: PUT
+    validate_certs: false
+    return_content: true
+    headers:
+      X-API-Key: "{{ syncthing_api_key.matches[0].apikey }}"
+    url: "http://localhost:8384/rest/config/defaults/ignores"
+    body_format: json
+    body: "{ 'lines': {{ arch_profile_syncthing_config.defaults_ignores }} }"
+    remote_src: true
+
+- name: Update local Syncthing default folder settings
+  uri:
+    method: PATCH
+    validate_certs: false
+    return_content: true
+    headers:
+      X-API-Key: "{{ syncthing_api_key.matches[0].apikey }}"
+    url: "http://localhost:8384/rest/config/defaults/folder"
+    body_format: json
+    body: "{{ item }}"
+    remote_src: true
+  loop:
+    - "{ 'path': '{{ arch_profile_syncthing_config.default_data_folder }}' }"
+    - "{ 'maxConflicts': {{ arch_profile_syncthing_config.default_max_conflicts }} }"
+
+- name: Get local Syncthing device
+  uri:
+    method: GET
+    validate_certs: false
+    return_content: true
+    headers:
+      X-API-Key: "{{ syncthing_api_key.matches[0].apikey }}"
+    url: "http://localhost:8384/rest/config/devices/{{ local_syncthing_status.json.myID }}"
+    remote_src: true
+  register: local_syncthing_device
+
+- name: Get remote Syncthing status
+  uri:
+    method: GET
+    validate_certs: false
+    return_content: true
+    headers:
+      X-API-Key: "{{ arch_profile_syncthing_config.remote_api_key }}"
+    url: "http://{{ arch_profile_syncthing_config.remote_host }}/rest/system/status"
+    remote_src: true
+  register: remote_syncthing_status
+
+- name: Get remote Syncthing device
+  uri:
+    method: GET
+    validate_certs: false
+    return_content: true
+    headers:
+      X-API-Key: "{{ arch_profile_syncthing_config.remote_api_key }}"
+    url: "http://{{ arch_profile_syncthing_config.remote_host }}/rest/config/devices/{{ remote_syncthing_status.json.myID }}"
+    remote_src: true
+  register: remote_syncthing_device
+
+- name: Add local device to remote Syncthing devices
+  uri:
+    method: POST
+    validate_certs: false
+    return_content: true
+    headers:
+      X-API-Key: "{{ arch_profile_syncthing_config.remote_api_key }}"
+    url: "http://{{ arch_profile_syncthing_config.remote_host }}/rest/config/devices"
+    body_format: json
+    body: "{{ local_syncthing_device.json }}"
+    remote_src: true
+
+- name: Add remote device to local Syncthing devices
+  uri:
+    method: POST
+    validate_certs: false
+    return_content: true
+    headers:
+      X-API-Key: "{{ syncthing_api_key.matches[0].apikey }}"
+    url: "http://localhost:8384/rest/config/devices"
+    body_format: json
+    body: "{{ remote_syncthing_device.json }}"
+    remote_src: true
+
+- name: Get local Syncthing folders
+  uri:
+    method: GET
+    validate_certs: false
+    return_content: true
+    headers:
+      X-API-Key: "{{ syncthing_api_key.matches[0].apikey }}"
+    url: "http://localhost:8384/rest/config/folders"
+    remote_src: true
+  register: local_syncthing_folders
+
+- name: Delete local Syncthing default folder
+  uri:
+    method: DELETE
+    validate_certs: false
+    return_content: true
+    headers:
+      X-API-Key: "{{ syncthing_api_key.matches[0].apikey }}"
+    url: "http://localhost:8384/rest/config/folders/{{ item.id }}"
+    remote_src: true
+  loop: "{{ local_syncthing_folders.json }}"
+  loop_control:
+    label: "{{ item.label }}"
+  when: "'default' == item.id"
+
+- name: Delete local Syncthing default folder from filesystem
+  file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ local_syncthing_folders.json }}"
+  loop_control:
+    label: "{{ item.label }}"
+  when: "'default' == item.id"
+
+- name: Get remote Syncthing folders
+  uri:
+    method: GET
+    validate_certs: false
+    return_content: true
+    headers:
+      X-API-Key: "{{ arch_profile_syncthing_config.remote_api_key }}"
+    url: "http://{{ arch_profile_syncthing_config.remote_host }}/rest/config/folders"
+    remote_src: true
+  register: remote_syncthing_folders
+
+- name: Add local device for remote Syncthing folders
+  set_fact:
+    remote_syncthing_folders_updated_devices:
+      "{{ remote_syncthing_folders_updated_devices | default([]) + [(item | combine({'devices': item.devices + device}))] }}"
+  vars:
+    device:
+      - "deviceID": "{{ local_syncthing_status.json.myID }}"
+        "encryptionPassword": ""
+        "introducedBy": "{{ remote_syncthing_status.json.myID }}"
+  loop: "{{ remote_syncthing_folders.json }}"
+  loop_control:
+    label: "{{ item.label }}"
+  when: item.label in (arch_profile_syncthing_config.accepted_folders_labels | json_query('[*].name'))
+
+- name: Update remote folders config with local Syncthing data folder path
+  set_fact:
+    local_syncthing_folders_updated:
+      "{{ local_syncthing_folders_updated | default([]) + [(item | combine({'path': path}))] }}"
+  vars:
+    path: "{{ arch_profile_syncthing_config.default_data_folder + '/' + item.label }}"
+  loop: "{{ remote_syncthing_folders.json }}"
+  loop_control:
+    label: "{{ item.label }}"
+  when: item.label in (arch_profile_syncthing_config.accepted_folders_labels | json_query('[*].name'))
+
+- name: Add remote device for local Syncthing folders
+  set_fact:
+    local_syncthing_folders_updated_devices:
+      "{{ local_syncthing_folders_updated_devices | default([]) + [(item | combine({'devices': device}))] }}"
+  vars:
+    device:
+      - "deviceID": "{{ local_syncthing_status.json.myID }}"
+        "encryptionPassword": ""
+        "introducedBy": ""
+      - "deviceID": "{{ remote_syncthing_status.json.myID }}"
+        "encryptionPassword": ""
+        "introducedBy": ""
+  loop: "{{ local_syncthing_folders_updated }}"
+  loop_control:
+    label: "{{ item.label }}"
+  when: local_syncthing_folders_updated is defined
+
+- name: Update remote folders config with local Syncthing device
+  uri:
+    method: PUT
+    validate_certs: false
+    return_content: true
+    headers:
+      X-API-Key: "{{ arch_profile_syncthing_config.remote_api_key }}"
+    url: "http://{{ arch_profile_syncthing_config.remote_host }}/rest/config/folders/{{ item.id }}"
+    body_format: json
+    body: "{{ item }}"
+    remote_src: true
+  loop: "{{ remote_syncthing_folders_updated_devices }}"
+  loop_control:
+    label: "{{ item.label }}"
+  when: remote_syncthing_folders_updated_devices is defined
+
+- name: Update local folders config with remote Syncthing device
+  uri:
+    method: PUT
+    validate_certs: false
+    return_content: true
+    headers:
+      X-API-Key: "{{ syncthing_api_key.matches[0].apikey }}"
+    url: "http://localhost:8384/rest/config/folders/{{ item.id }}"
+    body_format: json
+    body: "{{ item }}"
+    remote_src: true
+  loop: "{{ local_syncthing_folders_updated_devices }}"
+  loop_control:
+    label: "{{ item.label }}"
+  when: local_syncthing_folders_updated_devices is defined
+
+- name: Wait for local Syncthing folders completion
+  uri:
+    method: GET
+    validate_certs: false
+    return_content: true
+    headers:
+      X-API-Key: "{{ syncthing_api_key.matches[0].apikey }}"
+    url: "http://localhost:8384/rest/db/completion?folder={{ folder.id }}"
+    remote_src: true
+  vars:
+    sync_query: "accepted_folders_labels[?name==`{{ folder.label }}`].waitsync"
+    sync_status: "{{ arch_profile_syncthing_config | json_query(sync_query) | join(', ') }}"
+  register: local_syncthing_completions
+  loop: "{{ local_syncthing_folders_updated_devices }}"
+  loop_control:
+    loop_var: folder
+    label: "{{ folder.label }}"
+  when: sync_status | bool
+  until: local_syncthing_completions.json.completion == 100
+  delay: 30
+  retries: 30
+
+- name: Set ignores for local Synctghing folders
+  template:
+    src: syncthing/stignore.j2
+    dest: "{{ folder.path + '/.stignore' }}"
+    owner: "{{ ansible_ssh_user }}"
+    group: "{{ ansible_ssh_user }}"
+    mode: '0600'
+  vars:
+    ignores_query: "accepted_folders_labels[?name==`{{ folder.label }}`].ignores"
+    ignores_folder: "{{ arch_profile_syncthing_config | json_query(ignores_query) | join(', ') }}"
+    ignores_list: "{{ arch_profile_syncthing_config.defaults_ignores + ignores_folder }}"
+  loop: "{{ local_syncthing_folders_updated_devices }}"
+  loop_control:
+    loop_var: folder
+    label: "{{ folder.label }}"
+  when: ignores_folder | length > 0
+
+...

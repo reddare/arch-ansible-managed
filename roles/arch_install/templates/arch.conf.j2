@@ -1,0 +1,13 @@
+title Arch Linux
+linux /vmlinuz-linux
+{% if "amd-ucode" in arch_install_pacstrap_packages %}
+initrd /amd-ucode.img
+{% elif "intel-ucode" in arch_install_pacstrap_packages %}
+initrd /intel-ucode.img
+{% endif %}
+initrd /initramfs-linux.img
+{% if (arch_install_luks_passphrase | default('', true) | trim != '') %}
+options cryptdevice=UUID={{ root_luks_uuid.stdout }}:root root=/dev/mapper/root rw quiet splash loglevel=3 rd.udev.log_priority=3 vt.global_cursor_default=0
+{% else %}
+options root=/dev/mapper/{{ device_root }} rw quiet splash loglevel=3 rd.udev.log_priority=3 vt.global_cursor_default=0
+{% endif %}

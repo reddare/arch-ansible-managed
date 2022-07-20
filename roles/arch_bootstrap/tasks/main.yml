@@ -1,0 +1,100 @@
+---
+
+- name: Gathering packages facts
+  package_facts:
+    manager: pacman
+
+- name: Install Reflector
+  pacman:
+    name: reflector
+    state: present
+    update_cache: true
+
+- name: Restrict reflector to only {{ arch_bootstrap_country }} mirrors
+  lineinfile:
+    insertafter: \# --country
+    line: --country "{{ arch_bootstrap_country }}"
+    path: /etc/xdg/reflector/reflector.conf
+    create: true
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Enable Reflector
+  systemd:
+    name: reflector
+    enabled: true
+    state: started
+  changed_when: false
+
+- name: Enable pacman multilib
+  blockinfile:
+    marker: "# {mark}"
+    marker_begin: "multilib"
+    marker_end: "---"
+    block: |
+      [multilib]
+      Include = /etc/pacman.d/mirrorlist
+    path: /etc/pacman.conf
+
+- name: Upgrade system with pacman
+  command: pacman -Syyu --noconfirm
+  changed_when: false
+
+- name: Install archlinux-keyring
+  command: pacman -S archlinux-keyring --noconfirm
+  changed_when: false
+
+- name: Install packages with pacman
+  pacman:
+    name: "{{ arch_bootstrap_pacman_packages }}"
+    state: present
+    update_cache: true
+
+- name: Clone yay
+  git:
+    repo: https://aur.archlinux.org/yay-bin.git
+    dest: /home/{{ ansible_ssh_user }}/yay
+    single_branch: true
+    version: master
+  when: "'yay-bin' not in ansible_facts.packages"
+
+- name: Install yay
+  command:
+    sh -c \
+    '
+      cd /home/{{ ansible_ssh_user }}/yay
+      && sudo -u {{ ansible_ssh_user }}
+      BUILDDIR=/home/{{ ansible_ssh_user }}/BUILDDIR
+      PKGDEST=/home/{{ ansible_ssh_user }}/PKGDEST
+      SRCDEST=/home/{{ ansible_ssh_user }}/SRCDEST
+      makepkg -sri --noconfirm
+      && rm -rf /home/{{ ansible_ssh_user }}/{BUILDDIR,PKGDEST,SRCDEST}
+      && rm -rf /home/{{ ansible_ssh_user }}/yay
+    '
+  args:
+    creates: /usr/bin/yay
+
+- name: Install packages with yay
+  aur:
+    name: "{{ item }}"
+    state: present
+    use: yay
+    update_cache: true
+  become: true
+  become_user: "{{ ansible_ssh_user }}"
+  loop: "{{ arch_bootstrap_yay_packages }}"
+
+- name: Set local timezone
+  command: timedatectl set-timezone "{{ arch_bootstrap_timezone }}"
+  changed_when: false
+
+- name: Enable ntp
+  command: timedatectl set-ntp true
+  changed_when: false
+
+- name: Set hardware clock from system clock
+  command: hwclock --systohc
+  changed_when: false
+
+...

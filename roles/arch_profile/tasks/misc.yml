@@ -1,0 +1,25 @@
+---
+
+- name: Enable PipeWire
+  systemd:
+    name: pipewire-pulse
+    enabled: true
+    scope: user
+    state: started
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ getent_passwd[ansible_ssh_user].1 }}"
+  become: true
+  become_user: "{{ ansible_ssh_user }}"
+  changed_when: false
+  when: "'pipewire-pulse' in ansible_facts.packages"
+
+- name: Configure amdgpu with template
+  template:
+    src: misc/20-amdgpu.conf
+    dest: "/etc/X11/xorg.conf.d/20-amdgpu.conf"
+    owner: "{{ ansible_ssh_user }}"
+    group: "{{ ansible_ssh_user }}"
+    mode: '0644'
+  when: "'xf86-video-amdgpu' in ansible_facts.packages"
+
+...
